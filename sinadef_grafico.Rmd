@@ -1,0 +1,33 @@
+---
+title: "SINADEF"
+output: html_notebook
+---
+
+Bajar datos y descomprimir de:
+
+https://www.datosabiertos.gob.pe/dataset/sinadef-certificado-defunciones
+
+```{r}
+x <- read_csv("TB_SINADEF_2021_12_23/TB_SINADEF.csv", col_types = cols(.default = col_character())) %>% 
+    mutate(
+        FECHA = as.Date(FECHA, format="%d/%m/%Y"),
+        EDAD=as.integer(EDAD)
+    ) 
+```
+
+
+```{r}
+count(x, `AÑO`) %>% 
+    filter(`AÑO` >= 2019) %>%
+    ggplot() + 
+    geom_col(aes(x=`AÑO`, y = n), fill="#F8766D") + 
+    geom_text(aes(x=`AÑO`, y = n * 0.94, label=format(n, big.mark = " ", scientific = FALSE)), color = "black") +
+    labs(title = "Muertes por cualquier causa en el SINADEF", y = "Muertes", x = "Año") + 
+    theme_light() + 
+    scale_y_continuous(labels=function(x) format(x, big.mark = " ", scientific = FALSE)) + 
+    theme(
+        plot.title = element_text(size=22),
+        axis.title = element_text(size=16),
+        axis.ticks = element_text(size=14)
+    )
+```
