@@ -3,6 +3,13 @@ title: "SINADEF"
 output: html_notebook
 ---
 
+```{r}
+library(dplyr)
+library(readr)
+library(ggplot2)
+```
+
+
 Bajar datos y descomprimir de:
 
 https://www.datosabiertos.gob.pe/dataset/sinadef-certificado-defunciones
