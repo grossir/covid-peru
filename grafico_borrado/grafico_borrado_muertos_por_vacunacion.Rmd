@@ -1,0 +1,76 @@
+---
+title: "Grafico borrado"
+output: html_notebook
+---
+
+El MINSA borró el gráfico de barras apiladas que mostraba los muertos por COVID según estado de vacunación.
+Puede verse mas al respecto en este hilo https://twitter.com/gjrossir/status/1471474649678684174
+Este script hace las cuentas para recrearlo
+Tambien, ver script de python que obtiene y archiva la data
+
+```{r}
+library(dplyr)
+library(lubridate)
+library(readr)
+library(stringr)
+```
+
+```{r}
+x <- 
+    read_csv("2021_12_31_TB_HOSP_VAC_FALLECIDOS.csv") %>% 
+    mutate_at(vars(contains("fecha")), function(x){ as.Date(x, format="%d/%m/%Y") }) %>% 
+    mutate(semana_muerte = week(cdc_fecha_fallecido_covid))
+```
+
+```{r}
+muertos <- 
+    x %>% 
+    filter( 
+        cdc_fecha_fallecido_covid >= as.Date("09/02/2021","%d/%m/%Y"),
+        cdc_fallecido_covid > 0
+    )
+```
+
+
+```{r}
+resumen <- 
+    muertos %>% 
+    group_by(semana_muerte) %>% 
+    mutate(total_muertos_semana = n()) %>% 
+    summarise(
+        no_vac = sum(if_else(flag_vacuna == 0, 1, 0)) ,
+        una_vac = sum(if_else(flag_vacuna == 1, 1, 0)) ,
+        dos_vac = sum(if_else(flag_vacuna == 2, 1, 0)) ,
+        tres_vac = sum(if_else(flag_vacuna == 3, 1, 0)) ,
+        total_muertos_semana = total_muertos_semana[1]
+    ) %>% 
+    mutate(
+        `No vacunado (%)` = no_vac/total_muertos_semana ,
+        `1 vacuna (%)` = una_vac/total_muertos_semana ,
+        `2 vacunas (%)` = dos_vac/total_muertos_semana ,
+        `3 vacunas (%)` = tres_vac/total_muertos_semana ,
+    )
+```
+
+
+Primera version para grafico de barras horizontal, no se vio tan bien
+```{r}
+
+resumen %>% write_csv("test.csv")
+```
+
+
+Segunda version con barras verticales, como el original
+```{r}
+transposed <- 
+    select(resumen, -no_vac, -una_vac, -dos_vac, -tres_vac, -total_muertos_semana) %>% 
+    mutate_at(vars(contains("%")), function(x) {round(x*100, 2)}) %>% 
+    t() %>%
+    as.data.frame()
+
+transposed$estado_vacunacion <- rownames(transposed)
+rownames(transposed) <- NULL
+colnames(transposed) <- colnames(transposed) %>% str_replace("V", "S-")
+transposed %>% filter(estado_vacunacion != "semana_muerte") %>% select(estado_vacunacion, everything()) %>% write_csv("test2.csv")
+```
+
