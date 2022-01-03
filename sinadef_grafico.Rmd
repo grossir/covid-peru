@@ -7,6 +7,8 @@ output: html_notebook
 library(dplyr)
 library(readr)
 library(ggplot2)
+library(lubridate)
+library(stringr)
 ```
 
 
@@ -37,4 +39,223 @@ count(x, `AÑO`) %>%
         axis.title = element_text(size=16),
         axis.ticks = element_text(size=14)
     )
+```
+
+
+
+
+## Parte 2: enfocando solo muertes por COVID
+
+
+
+[Fuente de datos de solo muertos por COVID](https://www.datosabiertos.gob.pe/dataset/fallecidos-por-covid-19-ministerio-de-salud-minsa)
+
+[Enlace directo](https://cloud.minsa.gob.pe/s/xJ2LQ3QyRW38Pe5/download)     
+[Archivado](https://web.archive.org/web/20220101005747/https://cloud.minsa.gob.pe/s/xJ2LQ3QyRW38Pe5/download)
+
+[Reporte del Grupo de Trabajo donde detallan los criterios](https://cdn.www.gob.pe/uploads/document/file/1920747/Criterios%20t%C3%A9cnicos.pdf)
+
+Criterios para clasificar, en orden descendiente de "certeza diagnostica"
+virologico                                  [PCR, antigena]
+serologico
+radiologica:                                radiografia, tomografia, resonancia magnetica compatible con neumonia COVIN
+nexo epidemiologico:                        nexo demostrado con caso probable de Covin
+investigacion epidemiologica                Verificado por RENACE (Red Nacional de Epidemiologia)
+SINADEF
+    si tienen en campos A, B, C, D 
+    CIE-10: U071, U072, B342, B972, o la mención de los términos “coronavirus”, “cov-2”, “cov2”, “covid” y “sars”.
+
+
+```{r}
+FECHA_COMIENZO_VACUNACION <- as.Date("09/02/2021", "%d/%m/%Y")
+x <- read_delim("2021_12_31_fallecidos_covid.csv", delim = ";") %>% 
+        mutate(
+            FECHA_FALLECIMIENTO = as.Date(as.character(FECHA_FALLECIMIENTO), "%Y%m%d"),
+            ano = year(FECHA_FALLECIMIENTO),
+            muerto_despues_de_inicio_vacunacion = FECHA_FALLECIMIENTO > FECHA_COMIENZO_VACUNACION
+        )
+```
+
+```{r}
+FECHA_COMIENZO_VACUNACION <- as.Date("09/02/2021", "%d/%m/%Y")
+FECHA_PRIMER_MUERTO_PANDEMIA <- x %>% filter(ano == 2020) %>% .$FECHA_FALLECIMIENTO %>% min()
+
+dias_2020 <- as.numeric(difftime(as.Date("31/12/2020", "%d/%m/%Y"), FECHA_PRIMER_MUERTO_PANDEMIA, units="days"))
+dias_hasta_vacunacion <- as.numeric(difftime(FECHA_COMIENZO_VACUNACION, FECHA_PRIMER_MUERTO_PANDEMIA, units="days"))
+dias_desde_vacunacion <- as.numeric(difftime(as.Date("31/12/2021", "%d/%m/%Y"), FECHA_COMIENZO_VACUNACION, units="days"))
+```
+
+
+```{r}
+cuentas_x_ano <- count(x, ano, sort=T)
+cuentas_corte_vacunacion <- count(x, muerto_despues_de_inicio_vacunacion, sort=T)
+```
+
+
+```{r}
+list(
+    "Corte anual"=list(
+        "Total de muertos 2020" = filter(cuentas_x_ano, ano == 2020)$n ,
+        "Total de muertos 2021" = filter(cuentas_x_ano, ano == 2021)$n ,
+        "Tasa diaria de muertos 2020" = filter(cuentas_x_ano, ano == 2020)$n / dias_2020,
+        "Tasa diaria de muertos 2021" = filter(cuentas_x_ano, ano==2021)$n / 365,
+        "Ratio de tasas (2021/2020)"=298.087/309.73 
+    ),
+    
+    "Corte por inicio de vacunacion"=list(
+        "Muertos antes de inicio de vacunacion" = filter(cuentas_corte_vacunacion, !muerto_despues_de_inicio_vacunacion)$n ,
+        "Muertos luego de inicio de vacunacion" = filter(cuentas_corte_vacunacion, muerto_despues_de_inicio_vacunacion)$n ,
+        "Tasa diaria de muertos antes del corte" = filter(cuentas_corte_vacunacion, !muerto_despues_de_inicio_vacunacion)$n / dias_hasta_vacunacion,
+        "Tasa diaria de muertos luego de corte" = filter(cuentas_corte_vacunacion, muerto_despues_de_inicio_vacunacion)$n / dias_desde_vacunacion,
+        "Ratio de tasas (luego/antes)" = 283.1692/322.516 
+
+    )
+)
+```
+
+```{r}
+  # Reduccion del 13% en tasa de muertes diarias
+    # Reduccion del 4% en tasa de uertes diarias
+```
+
+
+https://cloud.minsa.gob.pe/s/To2QtqoNjKqobfw/download 
+https://www.datosabiertos.gob.pe/dataset/vacunaci%C3%B3n-contra-covid-19-ministerio-de-salud-minsa
+
+Archivos son demasiado pesados, mejor trabajar con solo el resumen
+```{r}
+if (FALSE){
+    vacunas <- read_csv("vacunas_covid.csv")  
+    vacunas %>%
+        mutate(fecha_vacunacion = as.Date(as.character(FECHA_VACUNACION), format = "%Y%m%d")) %>% 
+        group_by(fecha_vacunacion, DOSIS) %>% 
+        summarise(cuenta = n()) %>% 
+        ungroup() %>% 
+        write_csv( paste0(Sys.Date(), "_", "vacunacion_por_dosis_por_dia.csv"))    
+} else{
+    vacunas_x_dosis_x_dia <- read_csv( paste0(Sys.Date(), "_", "vacunacion_por_dosis_por_dia.csv"))
+    acumulado_dos_dosis <- 
+        vacunas_x_dosis_x_dia %>% 
+        filter(DOSIS==2) %>%
+        arrange(fecha_vacunacion) %>% 
+        mutate(
+            acumulado = cumsum(cuenta),
+            acumulado_cientos_de_miles = acumulado / 100000
+        )
+}
+
+```
+
+
+
+```{r}
+scaleFactor <- 847 / max(acumulado_dos_dosis$acumulado)
+
+
+x %>% 
+    count(FECHA_FALLECIMIENTO) %>% rename(cuenta=n) %>% 
+    ggplot() + 
+    geom_col(aes(x=FECHA_FALLECIMIENTO, y = cuenta)) + 
+    geom_line(data=acumulado_dos_dosis, aes(x=fecha_vacunacion, y = acumulado*scaleFactor), col = "red") + 
+    scale_y_continuous(
+        name="Muertos por Covid",
+        sec.axis=sec_axis(~./scaleFactor, name="# con dos dosis (Millones)", labels=function(x){ paste0(round(x/1000000, 2), " M", "") })
+    ) + 
+    geom_vline(xintercept = FECHA_COMIENZO_VACUNACION, color = "darkred") + 
+    scale_x_date(breaks = scales::pretty_breaks(n = 12)) + 
+    labs(
+        x = "Fecha",
+        title = "Muertos diarios por Covid y vacunación acumulada (2 dosis)",
+        subtitle = "Muertos: según SINADEF\nLinea guinda es inicio de vacunación 09/02/2021"
+    ) + 
+  theme_minimal() + 
+  theme(
+    # axis.title.y.left=element_text(color="blue"),
+    # axis.text.y.left=element_text(color="blue"),
+    axis.title.y.right=element_text(color="red"),
+    axis.text.y.right=element_text(color="red")
+  ) 
+```
+Se han pasado las cuentas aqui
+https://docs.google.com/spreadsheets/d/1OdQdrop1AiYwy9XWBVK8hZeBko3N8VuTpJNomExo5oE/edit#gid=0
+
+
+
+
+
+
+## Parte 3: por edades
+```{r}
+muertos <- nrow(x)
+```
+
+```{r}
+(x_edad <- 
+    count(x, EDAD_DECLARADA, sort=T) %>% 
+    mutate(p  = round(n/muertos* 100,4))
+)
+```
+
+
+Grupos de riesgo segun el MINSA
+https://www.datosabiertos.gob.pe/dataset/tabla-de-grupo-de-riesgo
+5 - 12
+Personas de 12  a 17 años
+Personas de 18  a 19 años
+Personas de 20  a 29 años
+Personas de 30 a 39 años
+Personas de 40 a 49 años
+Personas de 50 a 59 años
+60 años a más
+60 años a más, Adulto Mayor
+
+```{r}
+x <- x %>% 
+    mutate(
+        grupo = case_when(
+            between(EDAD_DECLARADA, 60, 120) ~ "60+",
+            between(EDAD_DECLARADA, 50, 59) ~ "50-59",
+            between(EDAD_DECLARADA, 40, 49) ~ "40-49",
+            between(EDAD_DECLARADA, 30, 39) ~ "30-39",
+            between(EDAD_DECLARADA, 18, 29) ~ "18-29",
+            between(EDAD_DECLARADA, 13, 17) ~ "13-17",
+            between(EDAD_DECLARADA, 5, 12) ~ "5-12",
+            between(EDAD_DECLARADA, 0, 4) ~ "0-4"
+        )
+    )
+
+```
+
+
+
+Cifras finales por grupos
+```{r}
+x %>% 
+    count(grupo,sort=T) %>% 
+    mutate(p  = round(n/muertos* 100, 4)) %>% 
+    rename(`Grupo`=grupo, `Total de muertos`=n,  `Porcentaje del total` = p)
+```
+
+
+Cifras de criterios de definicion de muertes en los grupos jovenes
+```{r}
+filter(x, grupo %in% c("0-4", "5-12", "13-17")  ) %>%
+    count(CLASIFICACION_DEF,sort=T) %>%
+    ungroup() %>%
+    mutate(
+        p= round(n/sum(n)*100,4),
+        CLASIFICACION_DEF = str_replace(CLASIFICACION_DEF, "Ã³", "ó") %>% str_replace("Ã", "í") 
+    ) %>% 
+    rename(`Definición muerte por Covid` = CLASIFICACION_DEF, `Total de muertos`=n,  `Porcentaje del total` = p)
+    
+```
+
+
+
+### Analisis TODO: ver como evolucionan los criterios de evaluacion
+
+```{r}
+count(x, FECHA_FALLECIMIENTO, CLASIFICACION_DEF) %>% 
+    ggplot() + 
+    geom_line(aes(x=FECHA_FALLECIMIENTO, y = n, color=CLASIFICACION_DEF))
 ```
