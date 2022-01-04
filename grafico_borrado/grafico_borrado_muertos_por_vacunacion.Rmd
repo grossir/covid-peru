@@ -17,17 +17,17 @@ library(stringr)
 
 ```{r}
 x <- 
-    read_csv("2021_12_31_TB_HOSP_VAC_FALLECIDOS.csv") %>% 
+    read_csv("2022_01_04_TB_FALLECIDO_HOSP_VAC.csv") %>% 
     mutate_at(vars(contains("fecha")), function(x){ as.Date(x, format="%d/%m/%Y") }) %>% 
-    mutate(semana_muerte = week(cdc_fecha_fallecido_covid))
+    mutate(semana_muerte = paste0(year(fecha_fallecimiento), "-", str_pad(week(fecha_fallecimiento), 2, pad="0")))
 ```
 
 ```{r}
 muertos <- 
     x %>% 
     filter( 
-        cdc_fecha_fallecido_covid >= as.Date("09/02/2021","%d/%m/%Y"),
-        cdc_fallecido_covid > 0
+        fecha_fallecimiento >= as.Date("09/02/2021","%d/%m/%Y"),
+        # cdc_fallecido_covid > 0
     )
 ```
 
@@ -55,8 +55,8 @@ resumen <-
 
 Primera version para grafico de barras horizontal, no se vio tan bien
 ```{r}
-
-resumen %>% write_csv("test.csv")
+hoy <- Sys.Date()
+resumen %>% write_csv(paste0(hoy, "test.csv"))
 ```
 
 
@@ -64,13 +64,18 @@ Segunda version con barras verticales, como el original
 ```{r}
 transposed <- 
     select(resumen, -no_vac, -una_vac, -dos_vac, -tres_vac, -total_muertos_semana) %>% 
+    # mutate(semana_muerte = as.character(as.integer(semana_muerte))) %>% 
     mutate_at(vars(contains("%")), function(x) {round(x*100, 2)}) %>% 
     t() %>%
     as.data.frame()
 
+colnames(transposed) <- resumen$semana_muerte
 transposed$estado_vacunacion <- rownames(transposed)
 rownames(transposed) <- NULL
-colnames(transposed) <- colnames(transposed) %>% str_replace("V", "S-")
-transposed %>% filter(estado_vacunacion != "semana_muerte") %>% select(estado_vacunacion, everything()) %>% write_csv("test2.csv")
+transposed %>%
+    filter(estado_vacunacion != "semana_muerte") %>%
+    # rename(estado_vacunacion = semana_muerte) %>% 
+    select(estado_vacunacion, everything()) %>%
+    write_csv(paste0(hoy, "test2.csv"))
 ```
-
+    
