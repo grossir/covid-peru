@@ -45,16 +45,22 @@ cdc <-
 ```
 Pense cruzar por vacuna, pero la data CDC ya incluye los muertos con criterio SINADEF
 ```{r}
-# Data tarda demasiado en cargar, y en convertir la fecha
-# Me interesa saber si los muertos eran no vacunados
-# Asi que hay que cruzar con SINADEF y quedarnos con ese pedazo
-# vacunas <- read_csv("vacunas_covid.csv") 
-# write_rds(vacunas, "vacunas.rds")
-# filter(vacunas, DOSIS > 2) %>% select(-)
-# %>% 
-#     mutate(fecha_vacunacion = as.Date(as.character(FECHA_VACUNACION), format = "%Y%m%d")) 
-# vacunas %>% anti_join(sinadef %>% mutate(ID_PERSONA=as.integer(ID_PERSONA)), by = c("UUID"="ID_PERSONA"))
+# Ejecutar esto para hacer el archivo de carga tractable
+# !awk -F, '{print $2}' vacunas_covid.csv > vacunas_proyeccion.csv
+ids_vacunados <- read_csv("vacunas_proyeccion.csv")
+dos_o_mas_dosis <- count(ids_vacunados, UUID) %>% filter(n>=2)
 ```
+```{r}
+filter(sinadef, FECHA >= INICIO_SEGUNDA_SEMESTRE, year(FECHA) == 2021) %>% 
+    mutate(ID_PERSONA=as.numeric(ID_PERSONA)) %>% 
+    # Anti join nos da los muertos no vacunados e ese periodo
+    anti_join(dos_o_mas_dosis, by = c("ID_PERSONA"="UUID")) %>% 
+    nrow()
+```
+40882 / 49447 = 82.6%
+Este es el ratio de muertos por TODA CAUSA no vacunados / muertos por TODA CAUSA el periodo...
+
+
 
 
 Ojo: diferenciar del SINADEF completo vs el SINADEF parcial-COVID
