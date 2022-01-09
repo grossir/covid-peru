@@ -16,10 +16,11 @@ library(stringr)
 ```
 
 ```{r}
-x <- 
-    read_csv("2022_01_04_TB_FALLECIDO_HOSP_VAC.csv") %>% 
+cdc <- 
+    read_csv("2022_01_06_TB_FALLECIDO_HOSP_VAC.csv") %>% 
     mutate_at(vars(contains("fecha")), function(x){ as.Date(x, format="%d/%m/%Y") }) %>% 
-    mutate(semana_muerte = paste0(year(fecha_fallecimiento), "-", str_pad(week(fecha_fallecimiento), 2, pad="0")))
+    mutate(semana_muerte = paste0(year(fecha_fallecimiento), "|", str_pad(week(fecha_fallecimiento), 2, pad="0")))
+x <- cdc
 ```
 
 ```{r}
