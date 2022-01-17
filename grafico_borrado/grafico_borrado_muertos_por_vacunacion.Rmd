@@ -16,8 +16,9 @@ library(stringr)
 ```
 
 ```{r}
+# https://cloud.minsa.gob.pe/s/8EsmTzyiqmaySxk/download
 cdc <- 
-    read_csv("2022_01_06_TB_FALLECIDO_HOSP_VAC.csv") %>% 
+    read_csv("2022_01_16_TB_FALLECIDO_HOSP_VAC.csv") %>% 
     mutate_at(vars(contains("fecha")), function(x){ as.Date(x, format="%d/%m/%Y") }) %>% 
     mutate(semana_muerte = paste0(year(fecha_fallecimiento), "|", str_pad(week(fecha_fallecimiento), 2, pad="0")))
 x <- cdc
@@ -79,4 +80,19 @@ transposed %>%
     select(estado_vacunacion, everything()) %>%
     write_csv(paste0(hoy, "test2.csv"))
 ```
-    
+
+
+
+Grafico exploratorio de criterios de fallecimiento, a primera vista no veo una diferencia en la prevalencia de criterios. Tal vez se viera por grupos de edad (como vi en niños). Hay que desarrollarlo mas
+```{r, eval=F, include=F}
+x %>%
+    filter(year(fecha_fallecimiento) >= 2021) %>% 
+    count(flag_vacuna, criterio_fallecido,sort=T) %>% 
+    group_by(flag_vacuna) %>% 
+    mutate(total_criterio = sum(n)) %>% 
+    ungroup() %>% 
+    mutate(prop = n/total_criterio) %>% 
+    ggplot() +
+    geom_col(aes(x=flag_vacuna, y=prop, fill=criterio_fallecido)) 
+```
+
