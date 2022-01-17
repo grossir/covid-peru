@@ -35,6 +35,7 @@ sinadef_solo_covid <- read_delim("2022_01_07_fallecidos_covid_sinadef.csv", deli
             ano = year(FECHA_FALLECIMIENTO)
         )
 
+# https://cloud.minsa.gob.pe/s/8EsmTzyiqmaySxk/download
 cdc <- 
     read_csv("2022_01_06_TB_FALLECIDO_HOSP_VAC.csv") %>% 
     mutate_at(vars(contains("fecha")), function(x){ as.Date(x, format="%d/%m/%Y") }) %>% 
@@ -75,10 +76,18 @@ muertos_covid_cdc_segundo_semestre <- nrow(
     filter(cdc, fecha_fallecimiento >= INICIO_SEGUNDA_SEMESTRE, year(fecha_fallecimiento) == 2021)
 )
 
-muertos_covid_cdc_segundo_semestre_vacunados <- nrow(
-    filter(cdc, fecha_fallecimiento >= INICIO_SEGUNDA_SEMESTRE, year(fecha_fallecimiento) == 2021, flag_vacuna >=2)
+muertos_covid_cdc_segundo_semestre_tres_vacunados <- nrow(
+    filter(cdc, fecha_fallecimiento >= INICIO_SEGUNDA_SEMESTRE, year(fecha_fallecimiento) == 2021, flag_vacuna == 3)
 )
-    
+muertos_covid_cdc_segundo_semestre_dos_vacunados <- nrow(
+    filter(cdc, fecha_fallecimiento >= INICIO_SEGUNDA_SEMESTRE, year(fecha_fallecimiento) == 2021, flag_vacuna  == 2)
+)
+muertos_covid_cdc_segundo_semestre_una_vacunados <- nrow(
+    filter(cdc, fecha_fallecimiento >= INICIO_SEGUNDA_SEMESTRE, year(fecha_fallecimiento) == 2021, flag_vacuna ==1)
+)
+muertos_covid_cdc_segundo_semestre_no_vacunados <- nrow(
+    filter(cdc, fecha_fallecimiento >= INICIO_SEGUNDA_SEMESTRE, year(fecha_fallecimiento) == 2021, flag_vacuna == 0)
+)
 muertos_toda_causa <- nrow(
     filter(sinadef, FECHA >= INICIO_SEGUNDA_SEMESTRE, year(FECHA) == 2021)
 )
@@ -90,7 +99,10 @@ list(
     "muertos segundo semestre, toda causa"= muertos_toda_causa    ,
     "muertos segundo semestre, covid" = muertos_covid_segundo_semestre,
     "muertos segundo semestre, en CDC" = muertos_covid_cdc_segundo_semestre,
-    'muertos CDC, vacunados'=muertos_covid_cdc_segundo_semestre_vacunados
+    'muertos CDC,3  vacunados'=muertos_covid_cdc_segundo_semestre_tres_vacunados,
+    'muertos CDC, 2 vacunados'=muertos_covid_cdc_segundo_semestre_dos_vacunados,
+    'muertos CDC, 1 vacunados'=muertos_covid_cdc_segundo_semestre_una_vacunados,
+    'muertos CDC, no vac '=muertos_covid_cdc_segundo_semestre_no_vacunados
 )
 
 ```
