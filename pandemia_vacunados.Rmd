@@ -22,6 +22,7 @@ library(forcats)
 
 
 ```{r}
+# https://www.datosabiertos.gob.pe/dataset/casos-positivos-por-covid-19-ministerio-de-salud-minsa
 positivos <- read_delim("2022_01_24_positivos_covid.csv", delim = ";") %>%     
     mutate_at(
         vars(contains("FECHA")),
@@ -47,12 +48,22 @@ positivos %>%
         x = "Fecha de resultado de prueba",
         y = "Numero de pruebas positivas"
     ) + 
-    theme_minimal()
+  scale_x_date(breaks = scales::breaks_pretty(10))+ 
+  theme_minimal() + 
+  theme(
+      plot.title = element_text(size=30),
+      axis.title = element_text(size=20),
+      # axis.ticks = element_text(size=14),
+      axis.text.y=element_text(size=20)
+  ) 
+
 ```
 
 
 ```{r}
 if (!file.exists("resumen_vacunacion.csv")){
+    # De https://www.datosabiertos.gob.pe/dataset/vacunacion
+    # Ver en el readme.md del proyecto como lo proceso para obtener vacunas_proyeccion.csv
     vacunacion <- read_csv("vacunas_proyeccion.csv")
     n_vacs <- count(vacunacion, id_persona)
     write_csv(n_vacs, "resumen_vacunacion.csv") # reduce a 29.7M filas    
@@ -140,7 +151,7 @@ con_vac %>%
         `Porcentaje del total` = p,
     ) %>% 
     kbl(
-        caption = "<b style='color:black !important; text-align:center !important;'>Distribución de pruebas positivas<br>según número de positivos por cada persona, desde 15/12/2021 hasta 24/01/2022</b>", 
+        caption = "<b style='color:black !important; text-align:center !important;'>Distribución de pruebas positivas según número de positivos por cada persona, desde 15/12/2021 hasta 24/01/2022</b>", 
     ) %>%
     kable_paper(full_width=F)
 ```
@@ -204,6 +215,8 @@ count(con_vac, METODO,sort=T) %>%
     # kable_material_dark(full_width = F, )
 ```
 
+
+##### Disclaimer en los datos abiertos
 
 Es el registro diario de casos positivos de covid-19 confirmados con cualquier tipo de prueba y que presentan síntomas. Cada registro es igual a una persona, la cual puede caracterizarse por sexo, edad y ubicación geográfica hasta nivel de distrito.
 
