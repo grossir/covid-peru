@@ -3,14 +3,14 @@
 Análisis y gráficos sobre el Covin en Perú
 Pueden encontrar la publicación y discusiones en mi [Twitter](https://twitter.com/gjrossir)
 
-### Productos
+## Productos
 
 [Gráfico borrado por el Minsa: Visualización de fallecidos por Covin según estado de vacunación](https://datawrapper.dwcdn.net/naPx1/)
 
 
-### Datos
+## Datos
 
-#### Sinadef
+### Sinadef
 
 
 Muertos por todas las causas
@@ -27,8 +27,9 @@ Muertos por todas las causas
 
 
 
+----------------
 
-#### Sinadef (solo muertos por Covid)
+### Sinadef (solo muertos por Covid)
 
 Muertos por Covid, con todos los campos del registro Sinadef
 
@@ -36,7 +37,9 @@ Muertos por Covid, con todos los campos del registro Sinadef
 [Datos](https://cloud.minsa.gob.pe/s/xJ2LQ3QyRW38Pe5/download)
 
 
-#### Fallecidos, hospitalizados, vacunados (CDC)
+----------------
+
+### Fallecidos, hospitalizados, vacunados (CDC)
 
 Todos en esta archivo fallecieron.
 
@@ -50,7 +53,9 @@ Los muertos del último periodo (mitad del 2022 en adelante) si están completos
 [Datos](https://cloud.minsa.gob.pe/s/8EsmTzyiqmaySxk/download)
 
 
-#### Vacunación
+----------------
+
+### Vacunación
 
 Posible de ligar con los otros archivos a través de ID_PERSONA
 
@@ -87,10 +92,19 @@ id_persona,id_vacunados_covid19,fecha_vacunacion,id_eess,id_centro_vacunacion,id
 28192674,20698369,17/09/2021,2495,102495,6,23,1,37
 ```
 
-#### Pruebas Positivas
+----------------
+
+### Pruebas Positivas
 
 Tiene ID_PERSONA
 
 [Home](https://www.datosabiertos.gob.pe/dataset/casos-positivos-por-covid-19-ministerio-de-salud-minsa)
 [Datos](https://cloud.minsa.gob.pe/s/AC2adyLkHCKjmfm/download)
 
+-----------------
+
+### Pruebas PCR - INS
+
+Puede servir para complementar el analisis de "pandemia de los vacunados", parece que contiene datos de *todas* las pruebas, no solo positivas.
+
+[Home](https://www.datosabiertos.gob.pe/dataset/dataset-de-pruebas-moleculares-del-instituto-nacional-de-salud-para-covid-19-ins)
