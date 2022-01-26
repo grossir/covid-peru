@@ -1,0 +1,216 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+```{r}
+library(readr)
+library(dplyr)
+library(lubridate)
+library(ggplot2)
+library(stringr)
+library(kableExtra)
+library(forcats)
+```
+```{css}
+    caption {
+      color: black;
+      font-weight: bold;
+      font-size: 1.0em;
+    } 
+```
+
+
+```{r}
+positivos <- read_delim("2022_01_24_positivos_covid.csv", delim = ";") %>%     
+    mutate_at(
+        vars(contains("FECHA")),
+        function(x) { as.Date(as.character(x), "%Y%m%d") } 
+    )
+tmp <- colnames(positivos) 
+tmp[5] <- "METODO"
+colnames(positivos) <- tmp
+```
+
+```{r}
+positivos
+```
+
+```{r}
+positivos %>% 
+    count(FECHA_RESULTADO) %>% 
+    ggplot() + 
+    geom_line(aes(x=FECHA_RESULTADO, y = n)) + 
+    labs(
+        title= "Pruebas positivas de Covid",
+        subtitle ="Fuente: Datos abiertos MINSA, al 24/01/2022",
+        x = "Fecha de resultado de prueba",
+        y = "Numero de pruebas positivas"
+    ) + 
+    theme_minimal()
+```
+
+
+```{r}
+if (!file.exists("resumen_vacunacion.csv")){
+    vacunacion <- read_csv("vacunas_proyeccion.csv")
+    n_vacs <- count(vacunacion, id_persona)
+    write_csv(n_vacs, "resumen_vacunacion.csv") # reduce a 29.7M filas    
+} else{
+    n_vacs <- read_csv("resumen_vacunacion.csv")
+}
+```
+
+
+Corte al 15/12/2021
+¿Por qué elegir esta fecha de corte?
+
+- Para ver unos dias antes del inicio de la 3era ola
+- Por el inicio del "carnet de vacunacion"
+```{r}
+positivos %>% 
+    filter(FECHA_RESULTADO >= as.Date("15/12/2021", "%d/%m/%Y")) %>% 
+    nrow()
+```
+
+#### Cruzando positivos con vacuandos
+
+Se puede comprobar el cruce haciendo una busqueda del ID PERSONA en la data original y comparando la edad. 
+Tal vez valdria la pena hacer la proyeccion con edad para comprobar que los datos esten bien cruzados. Haciendo una muestrita a dedo, parece bien
+
+grep 24662352 2022_01_24_TB_VACUNACION_COVID19/TB_VACUNACION_COVID19.csv
+grep 24662596 2022_01_24_TB_VACUNACION_COVID19/TB_VACUNACION_COVID19.csv
+grep 24662367 2022_01_24_TB_VACUNACION_COVID19/TB_VACUNACION_COVID19.csv
+
+```{r}
+con_vac <- 
+    positivos %>% 
+    filter(FECHA_RESULTADO >= as.Date("15/12/2021", "%d/%m/%Y")) %>% 
+    left_join(n_vacs) 
+```
+
+
+Notar que en los datos de positividad hay ID_PERSONA vacios, por lo que no puedo decir si estan vac, no vac o que
+
+```{r}
+nrow(con_vac)
+```
+
+```{r}
+con_vac <- filter(con_vac, !is.na(id_persona))
+nrow(con_vac)
+```
+
+```{r}
+710440-695162
+```
+15 278 positivos que no se puede saber su estado de vacunacion
+
+
+
+Porcentaje general de positividad segun dosis
+```{r}
+con_vac %>%
+    count(n, sort=T) %>% 
+    mutate(
+        p = round(nn/nrow(con_vac)*100, 3),
+        n = if_else(is.na(n), 0, n)
+    ) %>% 
+    rename(
+        `Número de dosis` = n,
+        `Número de positivos` = nn,
+        `Porcentaje del total de positivos` = p,
+    ) %>% 
+      kbl(
+          caption = "Distribución de pruebas positivas según estado de vacunación, desde 15/12/2021 hasta 24/01/2022"
+         ) %>%
+    kable_material_dark()
+```
+
+
+
+```{r}
+con_vac %>%
+    count(id_persona, name='positivos_x_persona') %>%
+    count(positivos_x_persona, sort=T) %>% 
+    mutate(p = round(n/sum(n)*100, 3)) %>%
+    rename(
+        `Número de veces positivo` = positivos_x_persona,
+        `Número de personas` = n,
+        `Porcentaje del total` = p,
+    ) %>% 
+    kbl(
+        caption = "<b style='color:black !important; text-align:center !important;'>Distribución de pruebas positivas<br>según número de positivos por cada persona, desde 15/12/2021 hasta 24/01/2022</b>", 
+    ) %>%
+    kable_paper(full_width=F)
+```
+
+Notar que, en este periodo de mes y 10 dias, hay:
+
+- 23 personas que dan 4 veces positivo
+- 614 que dan 3 veces positivos
+- 23621 que dan 2 veces positivo (razonable, habria que ver)
+
+Las duplicaciones suenan razonables, pero 3 o 4 suena raro... Facil y se hicieron la prueba varias veces. 
+Igual, el 96.38% de los datos corresponde a personas que salieron positivo 1 sola vez
+
+
+Verlo por proporciones diarias afianza la idea
+
+```{r}
+con_vac %>% 
+    rename(n_dosis=n) %>% 
+    count(FECHA_RESULTADO, n_dosis, name='x_dia_x_dosis') %>% 
+    group_by(FECHA_RESULTADO) %>% 
+    mutate(
+        p = x_dia_x_dosis/sum(x_dia_x_dosis)*100,
+        n_dosis = forcats::fct_rev(if_else(is.na(n_dosis), "0", as.character(n_dosis)))
+    ) %>% 
+    ggplot() + 
+    geom_col(aes(x=FECHA_RESULTADO, y = p, fill=n_dosis)) + 
+    labs(
+        title = "Porcentajes de pruebas positivas Covid según estado de vacunación",
+        subtitle = "Desde 15/12/2021 hasta 24/01/2022 | Fuente: datos abiertos Minsa | @gjrossir",
+        y = "Porcentaje (%) de pruebas positivas",
+        x = "Fecha de resultado de prueba",
+        fill = "# de dosis"
+    ) +
+    scale_x_date(date_breaks = "1 day", date_labels =  "%d/%m/%y")  + 
+    scale_fill_manual(values = rev(c("#c71e1d", "#ffe59c", "#09bb9f","#18a1cd"))) +
+    theme_minimal() + 
+    theme(
+        plot.title = element_text(size=30),
+        axis.title = element_text(size=20),
+        # axis.ticks = element_text(size=14),
+        axis.text.x=element_text(angle=90),
+        axis.text.y=element_text(size=20),
+        legend.text = element_text(size=18),
+        legend.title = element_text(size=16)
+    ) 
+``` 
+
+### Viendolo por metodos
+
+```{r}
+count(con_vac, METODO,sort=T) %>% 
+    rename(
+        `Tipo de prueba` = METODO,
+        `Número de pruebas` = n
+    ) %>% 
+    kbl(
+        caption = "<b style='color:black !important; text-align:center !important;'>Distribución de pruebas positivas según tipo de prueba,<br>desde 15/12/2021 hasta 24/01/2022</b>", 
+    ) %>%
+    kable_paper(full_width=F)
+    # kable_material_dark(full_width = F, )
+```
+
+
+Es el registro diario de casos positivos de covid-19 confirmados con cualquier tipo de prueba y que presentan síntomas. Cada registro es igual a una persona, la cual puede caracterizarse por sexo, edad y ubicación geográfica hasta nivel de distrito.
+
+Directiva Sanitaria para la vigilancia epidemiológica de la enfermedad de Coronavirus en el Perú, aquí se establece los lineamientos y procedimientos de identificación de casos positivos, para más detalle ver el link:
+
+https://www.gob.pe/institucion/minsa/normas-legales/1322786-905-2020-minsa
+
+Nota: Desde el 02/06/2020 los casos por PR no incluye las IPRESS privadas que realizan tamizaje a trabajadores de empresas en el marco de la reactivación económica, debido a que el objetivo de este tamizaje NO permite identificar casos nuevos en personas sospechosas
+
+Fuente: Instituto Nacional de Salud y Centro Nacional de Epidemiologia, prevención y Control de Enfermedades –
