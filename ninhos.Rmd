@@ -9,6 +9,7 @@ library(readr)
 library(ggplot2)
 library(lubridate)
 library(stringr)
+library(tidyr)
 ```
 
 
@@ -20,13 +21,14 @@ library(stringr)
 # Si tiene ID persona
 # https://www.datosabiertos.gob.pe/dataset/sinadef-certificado-defunciones
 # https://cloud.minsa.gob.pe/s/g9KdDRtek42X3pg/download
-sinadef_completo <- read_csv("2022_01_17_TB_SINADEF/TB_SINADEF.csv", col_types = cols(.default = col_character())) %>% 
+sinadef_completo <- read_csv("2022_01_28_TB_SINADEF/TB_SINADEF.csv", col_types = cols(.default = col_character())) %>% 
     mutate(
         FECHA = as.Date(FECHA, "%m/%d/%Y"),
         ID_PERSONA=as.numeric(ID_PERSONA),
         `AÑO` = as.integer(`AÑO`),
         MES = as.integer(MES),
         EDAD = as.numeric(EDAD),
+        # Necesidad de tener en cuenta estos tipos de Tiempo, Edad no siempre esta en años
         EDAD = if_else(`TIEMPO EDAD` %in% c("DIAS", "HORAS", "MESES", "MINUTOS", "SEGUNDOS"), 0, EDAD),
         grupo = case_when(
             between(EDAD, 60, 120) ~ "60+",
@@ -42,21 +44,181 @@ sinadef_completo <- read_csv("2022_01_17_TB_SINADEF/TB_SINADEF.csv", col_types =
         )
     )
 
+
 # https://www.datosabiertos.gob.pe/dataset/fallecidos-por-covid-19-ministerio-de-salud-minsa/resource/4b7636f3-5f0c-4404-8526
 # https://cloud.minsa.gob.pe/s/xJ2LQ3QyRW38Pe5/download
 sinadef_solo_covid <- read_delim("2022_01_17_fallecidos_sinadef.csv", delim = ";") %>% 
         mutate(
             FECHA_FALLECIMIENTO = as.Date(as.character(FECHA_FALLECIMIENTO), "%Y%m%d"),
-            ano = year(FECHA_FALLECIMIENTO)
+            ano = year(FECHA_FALLECIMIENTO),
+            grupo = case_when(
+                between(EDAD_DECLARADA, 60, 120) ~ "60+",
+                between(EDAD_DECLARADA, 50, 59) ~ "50-59",
+                between(EDAD_DECLARADA, 40, 49) ~ "40-49",
+                between(EDAD_DECLARADA, 30, 39) ~ "30-39",
+                between(EDAD_DECLARADA, 18, 29) ~ "18-29",
+                between(EDAD_DECLARADA, 13, 17) ~ "13-17",
+                between(EDAD_DECLARADA, 5, 12) ~ "5-12",
+                between(EDAD_DECLARADA, 1, 4) ~ "1-4",
+                EDAD_DECLARADA == 0 ~ "0"
+            )
+
         )
 ```
+
+Grupos de riesgo segun el MINSA
+https://www.datosabiertos.gob.pe/dataset/tabla-de-grupo-de-riesgo
+5 - 12
+Personas de 12  a 17 años
+Personas de 18  a 19 años
+Personas de 20  a 29 años
+Personas de 30 a 39 años
+Personas de 40 a 49 años
+Personas de 50 a 59 años
+60 años a más
+60 años a más, Adulto Mayor
+
+
+## Analisis del Sinadef por grupos etarios
+
+
+```{r}
+(muertes_x_covid_x_edad <- 
+    sinadef_solo_covid %>% 
+    filter(EDAD_DECLARADA <= 17, ano <=2021, !is.na(grupo)) %>%
+    count(grupo,ano,sort=T) %>% 
+    spread(ano, n) %>% 
+    rowwise() %>% 
+    mutate(ordenador = as.integer(unlist(str_split(grupo, "-"))[1])) %>%
+    arrange(ordenador) %>% 
+    select(-ordenador) %>% 
+    rename(
+        `Grupo por edad` = grupo,
+        `Muertes por Covid 2020` = `2020`,
+        `Muertes por Covid 2021` = `2021`,
+    )
+)
+```
+
+```{r}
+(resumen <- 
+    sinadef_completo %>% 
+    filter( `AÑO` < 2022, grupo != 'no-determinable') %>% 
+    # filter(grupo %in% c("0", "5-12", "1-4", "13-17")) %>% 
+    count(grupo, `AÑO`) %>% 
+    arrange(grupo, `AÑO`) %>% 
+    spread(`AÑO`, n) %>% 
+    rowwise() %>% 
+    mutate(ordenador = as.integer(unlist(str_split(grupo, "-"))[1])) %>%
+    arrange(ordenador) %>% 
+    select(-ordenador, -`2017`) %>% 
+    rename(`Grupo por edad en años` = grupo)
+)
+```
+
+```{r}
+write_csv(resumen, "resumen_sinadef_x_edad.csv")
+```
+
+```{r}
+focus <- 
+    resumen %>%
+    head(4) %>%
+    rename(
+        `Muertes SINADEF 2018` = `2018`,
+        `Muertes SINADEF 2019` = `2019`,
+        `Muertes SINADEF 2020` = `2020`,
+        `Muertes SINADEF 2021` = `2021`,
+    )
+
+bind_cols(
+        focus,
+        select(muertes_x_covid_x_edad, -`Grupo por edad`) 
+    ) %>% 
+    rename(
+        `Grupo por edad` = `Grupo por edad en años`
+    ) %>% 
+    write_csv("resumen_sinadef_x_edad_focus.csv")
+```
+
+
+
+Haciendo zoom en el grupo 5-12 que quieren promover ahora
+
+```{r}
+sinadef_completo %>% 
+    filter( `AÑO` < 2022, grupo=="5-12") %>% 
+    # filter(grupo %in% c("0", "5-12", "1-4", "13-17")) %>% 
+    count(EDAD, `AÑO`) %>% 
+    arrange(EDAD, `AÑO`) %>% 
+    spread(`AÑO`, n) %>% 
+    select(-`2017`)
+```
+
+
+
+
+Decido no descartar muertes violentas, aunque los numeros son bien parecidos
+```{r}
+sinadef_completo %>% 
+    filter(
+        `AÑO` < 2022,
+        grupo != 'no-determinable',
+        is.na(`MUERTE VIOLENTA`) | !`MUERTE VIOLENTA` %in% c("OTRO ACCIDENTE", "ACCIDENTE DE TRANSITO", "SUICIDIO", "HOMICIDIO")
+    ) %>% 
+    # filter(grupo %in% c("0", "5-12", "1-4", "13-17")) %>% 
+    count(grupo, `AÑO`) %>% 
+    arrange(grupo, `AÑO`) %>% 
+    spread(`AÑO`, n) %>% 
+    rowwise() %>% 
+    mutate(ordenador = as.integer(unlist(str_split(grupo, "-"))[1])) %>%
+    arrange(ordenador) %>% 
+    select(-ordenador, -`2017`)
+```
+
+
+```{r}
+sinadef_solo_covid %>%
+    filter(EDAD_DECLARADA < 5) %>% 
+    count(CLASIFICACION_DEF, sort = T) %>% 
+    mutate(
+        total = sum(n),
+        p = round(n/total*100, 2),
+        CLASIFICACION_DEF = str_replace(CLASIFICACION_DEF, "Ã³", "ó") %>% str_replace("Ã", "í") 
+    ) %>% 
+    rename(`Criterio de clasificación muerte por Covid` = CLASIFICACION_DEF, `Total de muertos`=n,  `Porcentaje del total` = p) %>% 
+    select(-total) %>% 
+    kbl(
+        caption = "<b style='color:black !important; text-align:center !important;'>Criterios de clasificación en muertos por Covid del grupo de 0-4 años</b>", 
+    ) %>%
+    kable_paper(full_width=F)
+
+```
+
+```{r}
+(179 + 162)/509
+```
+
+66.9%
+
+
+
+
+
+
+
+# Otros analisis no publicados
+
+
+
+
 
 Analizando solo data del 2020 y 2021
 ```{r}
 sinadef_solo_covid <- filter(sinadef_solo_covid, ano <= 2021)
 sinadef <- sinadef_completo %>% 
     filter(
-        (!is.na(FECHA) & FECHA >= min(sinadef_solo_covid$FECHA_FALLECIMIENTO) & year(FECHA) %in% c(2020, 2021)) |
+        (!is.na(FECHA) & FECHA  >= min(sinadef_solo_covid$FECHA_FALLECIMIENTO) & year(FECHA) %in% c(2020, 2021)) |
             (is.na(FECHA) & (  (`AÑO` == 2020 & MES >= 3) | `AÑO` == 2021 ) )
         ) # periodo solo de pandemia
 ```
@@ -77,35 +239,7 @@ muertos_x_covid <- nrow(sinadef_solo_covid)
 ```
 
 
-Grupos de riesgo segun el MINSA
-https://www.datosabiertos.gob.pe/dataset/tabla-de-grupo-de-riesgo
-5 - 12
-Personas de 12  a 17 años
-Personas de 18  a 19 años
-Personas de 20  a 29 años
-Personas de 30 a 39 años
-Personas de 40 a 49 años
-Personas de 50 a 59 años
-60 años a más
-60 años a más, Adulto Mayor
 
-```{r}
-sinadef_solo_covid <- 
-    sinadef_solo_covid %>% 
-    mutate(
-        grupo = case_when(
-            between(EDAD_DECLARADA, 60, 120) ~ "60+",
-            between(EDAD_DECLARADA, 50, 59) ~ "50-59",
-            between(EDAD_DECLARADA, 40, 49) ~ "40-49",
-            between(EDAD_DECLARADA, 30, 39) ~ "30-39",
-            between(EDAD_DECLARADA, 18, 29) ~ "18-29",
-            between(EDAD_DECLARADA, 13, 17) ~ "13-17",
-            between(EDAD_DECLARADA, 5, 12) ~ "5-12",
-            between(EDAD_DECLARADA, 1, 4) ~ "1-4",
-            EDAD_DECLARADA == 0 ~ "0"
-        )
-    )
-```
 
 ```{r}
 count(sinadef, grupo, name="todas_las_muertes") %>% 
@@ -143,19 +277,8 @@ sinadef_completo %>%
     count(grupo, `AÑO`, sort = T) %>% 
     arrange(grupo, `AÑO`)
 ```
-```{r}
-sinadef_completo %>% 
-    filter( `AÑO` < 2022, grupo != 'no-determinable') %>% 
-    # filter(grupo %in% c("0", "5-12", "1-4", "13-17")) %>% 
-    count(grupo, `AÑO`) %>% 
-    arrange(grupo, `AÑO`) %>% 
-    spread(`AÑO`, n) %>% 
-    # select(-`2017`) %>% 
-    rowwise() %>% 
-    mutate(ordenador = as.integer(unlist(str_split(grupo, "-"))[1])) %>%
-    arrange(ordenador) %>% 
-    select(-ordenador)
-```
+
+
 
 
 0	2019	4758	
