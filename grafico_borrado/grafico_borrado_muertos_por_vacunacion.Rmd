@@ -18,7 +18,7 @@ library(stringr)
 ```{r}
 # https://cloud.minsa.gob.pe/s/8EsmTzyiqmaySxk/download
 cdc <- 
-    read_csv("2022_01_16_TB_FALLECIDO_HOSP_VAC.csv") %>% 
+    read_csv("2022_02_07_TB_FALLECIDO_HOSP_VAC.csv") %>% 
     mutate_at(vars(contains("fecha")), function(x){ as.Date(x, format="%d/%m/%Y") }) %>% 
     mutate(semana_muerte = paste0(year(fecha_fallecimiento), "|", str_pad(week(fecha_fallecimiento), 2, pad="0")))
 x <- cdc
@@ -58,7 +58,12 @@ resumen <-
 Primera version para grafico de barras horizontal, no se vio tan bien
 ```{r}
 hoy <- Sys.Date()
-resumen %>% write_csv(paste0(hoy, "test.csv"))
+resumen <- 
+    resumen %>%
+    filter(semana_muerte != tail(resumen, 1)$semana_muerte)  # truncando ultima semana para no tener esa cola de datos incompletos
+    
+
+write_csv(resumen, paste0(hoy, "test.csv"))
 ```
 
 
@@ -66,7 +71,6 @@ Segunda version con barras verticales, como el original
 ```{r}
 transposed <- 
     select(resumen, -no_vac, -una_vac, -dos_vac, -tres_vac, -total_muertos_semana) %>% 
-    # mutate(semana_muerte = as.character(as.integer(semana_muerte))) %>% 
     mutate_at(vars(contains("%")), function(x) {round(x*100, 2)}) %>% 
     t() %>%
     as.data.frame()
@@ -83,8 +87,29 @@ transposed %>%
 
 
 
+
+```{r}
+filter(x, semana_muerte=="2022|05") %>% View()
+```
+
+
+Interesante ver medidas centrales para 
+```{r}
+filter(x, semana_muerte=="2022|05") %>% group_by(flag_vacuna) %>% summarise(mean(edad), sd(edad))
+```
+
+```{r}
+library(ggplot2)
+filter(x, semana_muerte=="2022|05") %>% 
+    ggplot() + 
+    geom_histogram(aes(x=edad)) + facet_grid(flag_vacuna~.)
+```
+
+
+
 Grafico exploratorio de criterios de fallecimiento, a primera vista no veo una diferencia en la prevalencia de criterios. Tal vez se viera por grupos de edad (como vi en niños). Hay que desarrollarlo mas
 ```{r, eval=F, include=F}
+library(ggplot2)
 x %>%
     filter(year(fecha_fallecimiento) >= 2021) %>% 
     count(flag_vacuna, criterio_fallecido,sort=T) %>% 
