@@ -52,6 +52,10 @@ Los muertos del último periodo (mitad del 2022 en adelante) si están completos
 [Home](https://www.datosabiertos.gob.pe/dataset/fallecidos-hospitalizados-y-vacunados-por-covid-19)
 [Datos](https://cloud.minsa.gob.pe/s/8EsmTzyiqmaySxk/download)
 
+#### Problemas de consistencia
+
+Algunos que tienen flag_vacuna == 0 tiene fecha de dosis 1 o dosis 2 o dosis 3. ¿Serán vacunados en el extranjero? ¿Error de tipeo? Hay que controlar eso al momento de hacer las cuentas
+
 
 ----------------
 
