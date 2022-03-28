@@ -1,0 +1,326 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+```{r}
+library(readr)
+library(readxl)
+library(dplyr)
+library(ggplot2)
+library(stringr)
+library(data.table)
+```
+### Dataset con texto
+
+```{r}
+vacunas <- fread("2022_03_27_vacunas_covid/vacunas_covid.csv", select=c("EDAD", "FECHA_VACUNACION","DOSIS", "FABRICANTE"))
+# FECHA_CORTE,UUID,GRUPO_RIESGO,EDAD,SEXO,FECHA_VACUNACION,DOSIS,FABRICANTE,DIRESA,DEPARTAMENTO,PROVINCIA,DISTRITO
+# 20220320,14460228,PERSONAS DE 18  A 19 AÑOS,18,MASCULINO,20211129,2,SINOPHARM,PIURA,PIURA,SULLANA,SULLANA
+
+```
+
+```{r}
+count(vacunas, FABRICANTE,sort=T)
+```
+
+```{r}
+count(vacunas, FABRICANTE, DOSIS, sort=T)
+```
+
+```{r}
+tema <- 
+    theme(
+        plot.title = element_text(size=22),
+        axis.title = element_text(size=16),
+        axis.text = element_text(size=14),
+        axis.ticks.x = element_line(size=3)
+    )
+```
+
+
+```{r}
+# png("test.png", units="in", width=16, height=8, res=1000)
+
+g <- vacunas %>% 
+    filter(
+        FABRICANTE=="ASTRAZENECA",
+        FECHA_VACUNACION > 20210208
+    ) %>% 
+    mutate(fecha = as.Date(as.character(FECHA_VACUNACION), '%Y%m%d')) %>% 
+    count(fecha) %>% 
+    ggplot() +
+    geom_line(aes(x=fecha, y = n)) + 
+    geom_vline(
+        aes(xintercept=as.Date("26/11/2021", "%d/%m/%Y")), color="red", linetype="twodash"
+    ) + 
+    geom_label(
+        aes(x=as.Date("26/11/2021", "%d/%m/%Y"),y=90000, label="Dosis 3\na los 5 meses"), size=5, color="red"
+    ) + 
+    geom_vline(
+        aes(xintercept=as.Date("10/12/2021", "%d/%m/%Y")), color="darkcyan", linetype="twodash"
+    ) + 
+    geom_label(
+        aes(x=as.Date("10/12/2021", "%d/%m/%Y"),y=110000, label="Carnet de \nvacunacion"), size=5, color="darkcyan"
+    ) + 
+    geom_vline(
+        aes(xintercept=as.Date("20/12/2021", "%d/%m/%Y")), color="blue", linetype="twodash"
+    )+
+    geom_label(
+        aes(x=as.Date("20/12/2021", "%d/%m/%Y"), y=70000, label="Notif. de\nContraloria\ny Dosis 3 a\nlos 3 meses"), size=5, color="blue", nudge_x=10
+    ) + 
+    geom_vline(
+        aes(xintercept=as.Date("08/02/2022", "%d/%m/%Y")), color="orange", linetype="twodash"
+    ) +
+    geom_label(
+        aes(x=as.Date("08/02/2022", "%d/%m/%Y"), y=90000, label="Salida de\nCevallos"), size=5, color="orange"
+    ) +
+    geom_vline(
+        aes(xintercept=as.Date("28/02/2022", "%d/%m/%Y")), color="black", linetype="twodash"
+    ) +
+    geom_label(
+        aes(x=as.Date("28/02/2022", "%d/%m/%Y"), y=100000, label="Vence lote\nAstraZeneca"), size=5, color="black"
+    ) + 
+    scale_x_date(breaks=scales::pretty_breaks(14)) +
+    labs(
+        title="Inyectados diarios con AstraZeneca",
+        y = "Número de inyecciones aplicadas",
+        x = "Fecha de vacunación",
+        subtitle="@gjrossir con datos abiertos Minsa"
+    ) + 
+    theme_light() + 
+    tema
+
+# dev.off()
+```
+```{r}
+ggsave("test.png", g, dpi=600, width = 15, height=8)
+```
+
+
+```{r}
+g <- 
+    vacunas %>% 
+    filter(
+        FABRICANTE=="ASTRAZENECA",
+        FECHA_VACUNACION > 20210208,
+        DOSIS <= 3
+    ) %>% 
+    mutate(
+        fecha = as.Date(as.character(FECHA_VACUNACION), '%Y%m%d'),
+        DOSIS = as.character(DOSIS)
+    ) %>% 
+    count(fecha, DOSIS) %>% 
+    ggplot() +
+    geom_line(aes(x=fecha, y = n, color=DOSIS)) + 
+    geom_vline(
+        aes(xintercept=as.Date("26/11/2021", "%d/%m/%Y")), color="red", linetype="twodash"
+    ) + 
+    geom_label(
+        aes(x=as.Date("26/11/2021", "%d/%m/%Y"),y=90000, label="Dosis 3\na los 5 meses"), size=5, color="red"
+    ) + 
+    geom_vline(
+        aes(xintercept=as.Date("10/12/2021", "%d/%m/%Y")), color="darkcyan", linetype="twodash"
+    ) + 
+    geom_label(
+        aes(x=as.Date("10/12/2021", "%d/%m/%Y"),y=110000, label="Carnet de \nvacunacion"), size=5, color="darkcyan"
+    ) + 
+    geom_vline(
+        aes(xintercept=as.Date("20/12/2021", "%d/%m/%Y")), color="blue", linetype="twodash"
+    )+
+    geom_label(
+        aes(x=as.Date("20/12/2021", "%d/%m/%Y"), y=70000, label="Notif. de\nContraloria\ny Dosis 3 a\nlos 3 meses"), size=5, color="blue", nudge_x=10
+    ) + 
+    geom_vline(
+        aes(xintercept=as.Date("08/02/2022", "%d/%m/%Y")), color="orange", linetype="twodash"
+    ) +
+    geom_label(
+        aes(x=as.Date("08/02/2022", "%d/%m/%Y"), y=90000, label="Salida de\nCevallos"), size=5, color="orange"
+    ) +
+    geom_vline(
+        aes(xintercept=as.Date("28/02/2022", "%d/%m/%Y")), color="black", linetype="twodash"
+    ) +
+    geom_label(
+        aes(x=as.Date("28/02/2022", "%d/%m/%Y"), y=100000, label="Vence lote\nAstraZeneca"), size=5, color="black"
+    ) + 
+    scale_x_date(breaks=scales::pretty_breaks(14)) + 
+    labs(
+        title="Inyectados diarios con AstraZeneca, según dosis",
+        y = "Número de inyecciones aplicadas",
+        x = "Fecha de vacunación",
+        color = "Dosis",
+        subtitle="@gjrossir con datos abiertos Minsa"
+    ) + 
+    theme_light() + tema
+```
+
+```{r}
+ggsave("az_por_numero_de_dosis.png",g, dpi=600, width = 15, height=8)
+```
+
+
+```{r}
+por_fabricante_diario <- vacunas %>% 
+    filter(
+        FECHA_VACUNACION > 20210208,
+        DOSIS <= 3
+    ) %>% 
+    mutate(
+        fecha = as.Date(as.character(FECHA_VACUNACION), '%Y%m%d')
+    ) %>% 
+    count(fecha, FABRICANTE)
+```
+
+```{r}
+write_csv(por_fabricante_diario, "por_fabricante_dario.csv")
+```
+
+
+```{r}
+por_fabricante_diario %>% 
+    ggplot() +
+    geom_line(aes(x=fecha, y = n, color=FABRICANTE)) + 
+    scale_x_date(breaks=scales::pretty_breaks(14)) +
+    theme_light() 
+```
+
+```{r}
+g <- por_fabricante_diario %>% 
+    group_by(FABRICANTE) %>% 
+    mutate(
+        roll_average7 = (n + lag(n,1)+lag(n,2)+lag(n,3) + lead(n,1)+lead(n,2)+lead(n,3))/7        
+    ) %>% 
+    ggplot() +
+    geom_line(aes(x=fecha, y = n, color=FABRICANTE), alpha=0.35) + 
+    geom_line(aes(x=fecha, y = roll_average7, color=FABRICANTE), lwd=0.8) + 
+    scale_x_date(breaks=scales::pretty_breaks(14)) +
+    scale_color_brewer(type="qual", palette = "Set1")+  
+    scale_y_continuous(labels=function(x) format(x, big.mark = " ", scientific = FALSE)) + 
+    theme_light() + tema+
+    labs(
+        title="Inyectados diarios, según vacuna",
+        y = "Número de inyecciones aplicadas",
+        x = "Fecha de vacunación",
+        color = "Vacuna",
+        subtitle="Medias móviles de 7 días\n@gjrossir con datos abiertos Minsa"
+    ) 
+ggsave("por_fabricante.png",g, dpi=600, width = 15, height=8)
+g
+```
+
+
+
+```{r}
+todas_diario <- vacunas %>% 
+    filter(
+        FECHA_VACUNACION > 20210208,
+        DOSIS <= 3
+    ) %>% 
+    mutate(
+        fecha = as.Date(as.character(FECHA_VACUNACION), '%Y%m%d')
+    ) %>% 
+    count(fecha)
+```
+
+
+
+```{r}
+g <- todas_diario %>% 
+    mutate(
+        # roll_average5 = (n + lag(n,1)+lag(n, 2) + lead(n,1) + lead(n,2))/5,
+        roll_average7 = (n + lag(n,1)+lag(n,2)+lag(n,3) + lead(n,1)+lead(n,2)+lead(n,3))/7
+    ) %>% 
+    ggplot() +
+    geom_line(aes(x=fecha, y = n), alpha=0.4) +
+    # geom_line(aes(x=fecha, y = roll_average5), color = "red") +
+    geom_line(aes(x=fecha, y = roll_average7), color = "red") +
+    geom_vline(
+        aes(xintercept=as.Date("26/11/2021", "%d/%m/%Y")), color="mediumpurple", linetype="twodash"
+    ) + 
+    geom_label(
+        aes(x=as.Date("26/11/2021", "%d/%m/%Y"),y=600000, label="Dosis 3\na los 5 meses"), size=5, color="mediumpurple"
+    ) + 
+    geom_vline(
+        aes(xintercept=as.Date("10/12/2021", "%d/%m/%Y")), color="darkcyan", linetype="twodash"
+    ) + 
+    geom_label(
+        aes(x=as.Date("10/12/2021", "%d/%m/%Y"),y=500000, label="Carnet de \nvacunacion"), size=5, color="darkcyan", nudge_x=-5
+    ) + 
+    geom_vline(
+        aes(xintercept=as.Date("08/02/2022", "%d/%m/%Y")), color="orange", linetype="twodash"
+    ) +
+    geom_vline(
+        aes(xintercept=as.Date("04/01/2022", "%d/%m/%Y")), color="navyblue", linetype="twodash"
+    ) +
+    geom_label(
+        aes(x=as.Date("04/01/2022", "%d/%m/%Y"), y=10000, label="Tercera ola"), size=5, color="navyblue"
+    ) +
+    geom_vline(
+        aes(xintercept=as.Date("20/12/2021", "%d/%m/%Y")), color="blue", linetype="twodash"
+    )+
+    geom_label(
+        aes(x=as.Date("20/12/2021", "%d/%m/%Y"), y=550000, label="Notif. de\nContraloria\ny Dosis 3 a\nlos 3 meses"), size=5, color="blue", nudge_x=15
+    ) + 
+    geom_label(
+        aes(x=as.Date("08/02/2022", "%d/%m/%Y"), y=500000, label="Salida de\nCevallos"), size=5, color="orange"
+    ) +
+    geom_vline(
+        aes(xintercept=as.Date("28/02/2022", "%d/%m/%Y")), color="black", linetype="twodash"
+    ) +
+    geom_label(
+        aes(x=as.Date("28/02/2022", "%d/%m/%Y"), y=600000, label="Vence lote\nAstraZeneca"), size=5, color="black"
+    ) + 
+    scale_x_date(breaks=scales::pretty_breaks(14)) + 
+    scale_y_continuous(labels=function(x) format(x, big.mark = " ", scientific = FALSE)) + 
+    theme_light() + tema +
+    labs(
+        title="Inyectados diarios, toda vacuna",
+        y = "Número de inyecciones aplicadas",
+        x = "Fecha de vacunación",
+        subtitle="🔴Media móvil de 7 días\n🐦@gjrossir con datos abiertos Minsa"
+    ) 
+
+ggsave("general.png",g, dpi=600, width = 15, height=8)
+
+
+```
+
+
+
+
+
+
+
+
+
+
+
+### Dataset reducido (ignorar este bloque; lo dejo para recordarme que lo intente)
+```{r,eval=F}
+vacunas <- fread("2022_03_27_TB_VACUNACION_COVID19/TB_VACUNACION_COVID19.csv")
+count(vacunas, id_vacuna,sort=T)
+```
+
+```{r, eval=F}
+vacunas %>% 
+    # filter(fecha_vacunacion <= 20220118) %>%  # fecha de corte para el documento de DMUNI que tenemos
+    group_by(id_vacuna) %>% 
+    summarise(
+        fecha_maxima = max(fecha_vacunacion),
+        fecha_minima = min(fecha_vacunacion),
+        dosis1 = sum(if_else(dosis==1, 1, 0)),
+        dosis2 = sum(if_else(dosis==2, 1, 0)),
+        dosis3 = sum(if_else(dosis==3, 1, 0)),
+        total_dosis = n(),
+        edad_promedio = mean(edad, na.rm =T)
+    )
+```
+Hay 6 ids de vacuna
+Vacuna 5 se aplico de 2021-03-21 a 2021-09-30	
+Vacuna 4 se aplico de 2021-03-21 a 2021-09-30
+Vacuna 2 se aplico de 2021-04-01 a 2021-09-21
+
+No cuadran los numeros con los docs, usare el dataset completo
+
+
+
