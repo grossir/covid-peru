@@ -1,9 +1,10 @@
 ---
-title: "R Notebook"
+title: "Positividad segun estado de vacunacion"
 output: html_notebook
 ---
 
 ```{r}
+library(data.table)
 library(readr)
 library(dplyr)
 library(lubridate)
@@ -12,18 +13,425 @@ library(stringr)
 library(kableExtra)
 library(forcats)
 ```
-```{css}
-    caption {
-      color: black;
-      font-weight: bold;
-      font-size: 1.0em;
-    } 
+
+# Descarga de datos al dia de hoy
+
+URL positividad: https://www.datosabiertos.gob.pe/dataset/casos-positivos-por-covid-19-ministerio-de-salud-minsa
+URL vacunacion: https://www.datosabiertos.gob.pe/dataset/vacunacion
+
+```{r}
+# today <- as.character(Sys.Date())
+today <- "2022-08-18"
+dirname <- "positividad-vacunados"
+
+positividad_file <- paste0(dirname, "/", today, "-positivos.csv")
+if (!file.exists(positividad_file)){
+  download.file("https://files.minsa.gob.pe/s/eRqxR35ZCxrzNgr/download", positividad_file)  
+}
+
+vacunacion_file <- paste0(dirname, "/", today, "-TB_vacunacion.7z")
+if (!file.exists(vacunacion_file)){
+  download.file("https://cloud.minsa.gob.pe/s/oHF5JSLEk8KzpPW/download", vacunacion_file)  
+}
+```
+
+positividad-vacunados$ head 2022-08-18-TB_vacunacion/TB_VACUNACION_COVID19.csv 
+id_persona,id_vacunados_covid19,fecha_vacunacion,id_centro_vacunacion,id_vacuna,id_grupo_riesgo,dosis,id_eess,edad
+22532037,40175506,20210904,4083,6,68,1,9858,34
+16615005,40175562,20220202,348,5,68,3,9,35
+
+
+
+positividad-vacunados$ head 2022-08-18-positivos.csv
+FECHA_CORTE;DEPARTAMENTO;PROVINCIA;DISTRITO;METODODX;EDAD;SEXO;FECHA_RESULTADO;UBIGEO;id_persona
+20220816;AREQUIPA;AREQUIPA;AREQUIPA;PCR;34;MASCULINO;20220707;040101;13866130
+20220816;LIMA;LIMA;JESUS MARIA;AG;20;FEMENINO;20210419;150113;13866369
+
+wc -l 2022-08-18-positivos.csv
+4 046 671
+
+
+https://www.datosabiertos.gob.pe/dataset/siscovid-f100-pruebas
+https://cloud.minsa.gob.pe/s/Q6S9qAwfwE6c49X/download
+TB_F100_SICOVID.csv
+id_persona,fecha_prueba,id_tipo_prueba,id_resultado_prueba,id_ubigeo_prueba,fecha_sintomas
+12326510,12/01/2021,1,1,1293,12/01/2021
+6962508,19/07/2022,2,1,171,
+2639903,20/07/2022,2,1,1291,
+
+wc -l TB_F100_SICOVID.csv
+37 460 054
+
+
+
+**Hay que abrir el archivo zip manualmente**
+```{r}
+positivos <- 
+  fread(positividad_file, sep=";", select=c("id_persona", "FECHA_RESULTADO", "METODODX")) %>% 
+  as_tibble() 
+
+todos_positivos <- nrow(positivos)
+```
+
+```{r}
+positivos <- 
+  positivos %>% 
+  filter(!is.na(FECHA_RESULTADO))   # Hay pruebas sin fecha, no nos sirven
+
+positivos_con_fecha_resultado <- nrow(positivos)
+```
+
+```{r}
+positivos <- 
+  positivos %>% 
+  filter(
+    !is.na(id_persona) | (is.na(id_persona) & FECHA_RESULTADO < 20210201)  # Hay datos sin ID persona, se irian injustamente    
+  )
+
+positivos_con_id_persona <- nrow(positivos)
+```
+
+```{r}
+cat(todos_positivos, positivos_con_fecha_resultado, positivos_con_id_persona)
 ```
 
 
 ```{r}
+# > filter(vacunas, id_persona==22532037) %>% arrange(fecha_vacunacion)
+# # A tibble: 4 x 4
+#   id_persona fecha_vacunacion id_vacuna dosis
+#        <int>            <int>     <int> <int>
+# 1   22532037         20210904         6     1
+# 2   22532037         20210925         6     2
+# 3   22532037         20220118         5     3
+# 4   22532037         20220720         8     4
+
+procesado_file <- paste0(dirname, "/", today, "-vacunas_id_persona_fecha.csv")
+
+if (!file.exists(procesado_file)){
+  vacunacion_file <-  paste0(dirname, "/", today, "-TB_vacunacion/", "TB_VACUNACION_COVID19.csv")
+  vacunas <- fread(vacunacion_file, select=c("id_persona", "fecha_vacunacion", "dosis")) %>% as_tibble()
+  
+  
+  por_persona <- vacunas %>% 
+    inner_join(distinct(positivos, id_persona), by=c("id_persona")) %>%   # Reducir el tamanho antes de hacer el agregado
+    group_by(id_persona) %>% 
+    summarise(
+      fecha_dosis_1 = max(if_else(dosis==1, fecha_vacunacion, 0L), na.rm=T),
+      fecha_dosis_2 = max(if_else(dosis==2, fecha_vacunacion, 0L), na.rm=T),
+      fecha_dosis_3 = max(if_else(dosis==3, fecha_vacunacion, 0L), na.rm=T),
+      fecha_dosis_4 = max(if_else(dosis==4, fecha_vacunacion, 0L), na.rm=T)
+    )  
+  
+  write_csv(por_persona, procesado_file)
+}else{
+  por_persona <- read_csv(procesado_file)
+}
+
+```
+
+```{r}
+cruce <- 
+  positivos %>% 
+  left_join(por_persona, by="id_persona")
+```
+
+
+
+Demora cerca de 20 min, no pude conseguir q funcione vectorizado, el rowwise es similar a un loop
+
+```{r}
+cruce_add <- 
+  cruce %>%
+  distinct() %>% 
+  mutate(
+    dosis_al_positivo = case_when(
+      is.na(fecha_dosis_1) & is.na(fecha_dosis_2) & is.na(fecha_dosis_3) & is.na(fecha_dosis_4) ~ 0,
+      !is.na(fecha_dosis_1) & FECHA_RESULTADO <= fecha_dosis_1 ~ 0,
+      (FECHA_RESULTADO >= fecha_dosis_1 & FECHA_RESULTADO <= fecha_dosis_2) | (fecha_dosis_2 == 0 & fecha_dosis_1 > 0 & FECHA_RESULTADO > fecha_dosis_1) ~ 1,
+      (FECHA_RESULTADO >= fecha_dosis_2 & FECHA_RESULTADO <= fecha_dosis_3) | (fecha_dosis_3 == 0 & fecha_dosis_2 > 0 & FECHA_RESULTADO > fecha_dosis_2) ~ 2,
+      (FECHA_RESULTADO >= fecha_dosis_3 & FECHA_RESULTADO <= fecha_dosis_4) | (fecha_dosis_4 == 0 & fecha_dosis_3 > 0 & FECHA_RESULTADO > fecha_dosis_3) ~ 3,
+      !is.na(fecha_dosis_4) & FECHA_RESULTADO >= fecha_dosis_4 & fecha_dosis_4 > 0 ~ 4,
+      T ~ 5
+    )
+  )
+```
+
+```{r}
+write_csv(cruce_add, "dosis_al_positivo.csv")
+```
+
+
+```{r}
+count(cruce_add, dosis_al_positivo)
+```
+
+
+# A tibble: 7 x 8
+  id_persona FECHA_RESULTADO METODODX fecha_dosis_1 fecha_dosis_2 fecha_dosis_3 fecha_dosis_4 dosis_al_positivo
+       <int>           <int> <chr>            <int>         <int>         <int>         <int>             <dbl>
+1   17912953        20220113 AG                   0             0             0             0                 5
+2   20385043        20220114 PCR                  0             0             0             0                 5
+3   25638544        20220110 AG                   0             0             0             0                 5
+4    7060085        20210518 PCR                  0             0             0             0                 5
+5   13029490        20220610 AG                   0             0             0             0                 5
+6   35868177        20210324 AG                   0             0             0             0                 5
+7   35868177        20220719 PCR                  0             0             0             0                 5
+
+Son personas que tienen dosis Numero 6, etc. Probablemente vacunados en extranjero o de experimento de Sinopharm, o...
+Son tan pocas que seran excluidas
+
+# A tibble: 1 x 3
+  id_persona fecha_vacunacion dosis
+       <int>            <int> <int>
+1   17912953         20220530     6
+
+
+6240 filas de datos sucios: no se tienen sus fechas de vacunas completas, falta fecha de 1era, 2da, etc; y prueba positiva cae en uno de esos espacios vacios
+```{r}
+filter(cruce_add, FECHA_RESULTADO < 20210201 & dosis_al_positivo != 0)
+```
+
+```{r}
+nrow(filter(cruce_add, FECHA_RESULTADO < 20210201 & dosis_al_positivo != 0))
+```
+
+
+```{r}
+resumen <- 
+  cruce_add %>% 
+  filter(
+    FECHA_RESULTADO > 20210100,  # Quedandonos solo desde que inicia la vacunacion
+    !is.na(dosis_al_positivo),
+    dosis_al_positivo != 5,
+    FECHA_RESULTADO >= 20210301 | (FECHA_RESULTADO < 20210301 & dosis_al_positivo <= 1) 
+  ) %>% 
+  group_by(FECHA_RESULTADO) %>% 
+  mutate(
+    total_pruebas = n(),
+  ) %>% 
+  group_by(FECHA_RESULTADO, dosis_al_positivo) %>% 
+  summarise(
+    total_pruebas = unique(total_pruebas)[1],
+    positivos = n()
+  ) %>% 
+  ungroup() %>% 
+  mutate(
+    porcentaje = positivos/total_pruebas*100,
+    dosis_al_positivo = as.character(dosis_al_positivo),
+    fecha = as.Date(as.character(FECHA_RESULTADO), "%Y%m%d")
+  )
+```
+
+
+```{r}
+spanish_months_labels <- function(x){
+    # browser()
+    sapply(x, function(y){
+        if (is.na(y)){
+            return ("")
+        }
+        m <- lubridate::month(y)
+        s <- ""
+
+        if(m==1) s <- "Ene"
+        if(m==2) s <- "Feb"
+        if(m==3) s <- "Mar"
+        if(m==4) s <- "Abril"
+        if(m==5) s <- "Mayo"
+        if(m==6) s <- "Jun"
+        if(m==7) s <- "Jul"
+        if(m==8) s <- "Ago"
+        if(m==9) s <- "Set"
+        if(m==10) s <- "Oct"
+        if(m==11) s <- "Nov"
+        if(m==12) s <- "Dic"
+        
+        ano <- as.character(year(y))
+        
+        paste0(s, "-", str_sub(ano, -2))
+
+        # if (m ==1){
+        #   paste0(s, "\n", ano)
+        # } else{
+        #   s
+        # }
+
+    })
+
+}
+```
+
+```{r}
+breaks <- as.Date(
+  c(
+    # "2020-04-01", "2020-07-01", "2020-10-01", 
+    "2021-01-01", "2021-04-01", "2021-07-01", "2021-10-01", "2022-01-01","2022-04-01", "2022-07-01"))
+
+library(gridExtra)
+new_g <- grid.arrange(
+resumen %>% 
+  ggplot() + 
+  geom_col(aes(x=fecha, y=porcentaje, color=dosis_al_positivo, fill=dosis_al_positivo), position="stack") + 
+  scale_x_date(
+    breaks=breaks, labels=spanish_months_labels,
+    # expand=expand_scale(add=0, mult=0.025)
+    expand=c(0,0),
+    position="top"
+  ) + 
+  scale_y_continuous(
+    expand=expand_scale(add=0, mult=0.025),
+    sec.axis=sec_axis(~., labels=function(x){paste0(x, "%")}),
+    labels = function(x){paste0(x, "%")}
+  ) + 
+  labs(
+    title="Vacunados son mayoría de pruebas positivas Covid desde octubre 2021",
+    y = "Porcentaje de pruebas positivas",
+    x = "Fecha resultado de prueba",
+    fill="Número de dosis",
+    color="Número de dosis"
+  ) + 
+  theme_minimal() + 
+  theme(
+    panel.background = element_rect(fill = NA),
+    panel.ontop = TRUE,
+    panel.grid.minor = element_line(size = 0.10),
+    panel.grid.major = element_line(size = 0.6),
+    
+    plot.title = element_text(size=22, margin=margin(b=30)),
+    axis.title = element_text(size=16),
+    axis.title.x.top =   element_text(margin = margin(b=20)), #unit(c(0, 0, 0, 20))),
+    axis.title.y.right = element_text(margin=margin(l=30)),
+    axis.text.y = element_text(size=12),
+    axis.text.x = element_text(size=14),
+    axis.ticks.x = element_line(size=1),
+    plot.margin = unit(c(1,1.5,0.5,1.5), "cm"),
+    # legend.position = "bottom"
+  )
+, bottom="Con datos abiertos del Minsa\n🐦@gjrossir")
+
+```
+
+
+```{r}
+ggsave("positividad_proporcion.png", arrangeGrob(new_g), dpi=600, width = 16, height=8)
+```
+
+
+```{r}
+# Codigo de https://stackoverflow.com/questions/3099219/ggplot-with-2-y-axes-on-each-side-and-different-scales
+ylim.prim <- c(0, 100)
+ylim.sec <- c(0, 59000)
+
+b <- diff(ylim.prim)/diff(ylim.sec)
+a <- ylim.prim[1] - b*ylim.sec[1]
+
+
+resumen %>% 
+  ggplot() + 
+  geom_col(aes(x=fecha, y=porcentaje, color=dosis_al_positivo, fill=dosis_al_positivo), position="stack") + 
+  geom_line(aes(x=fecha, y=a + total_pruebas*b)) + 
+  scale_y_continuous(
+    "Porcentaje de pruebas positivas", 
+    sec.axis = sec_axis(~ (. - a)/b, name = "Número de pruebas Covid", breaks=scales::pretty_breaks(n=7))
+  ) + 
+  theme(legend.position="top")
+```
+
+```{r}
+summary(resumen$total_pruebas)
+```
+
+```{r}
+resumen %>% 
+  ggplot() + 
+  geom_line(aes(x=fecha, y=total_pruebas))
+```
+
+
+```{r}
+filter(cruce_add, dosis_al_positivo==3 & FECHA_RESULTADO < 20211000)
+```
+
+Mañana: revisar el otro dataset de pruebas tanto positivas como negativas
+Anotar el grafico con eventos importantes, ver como queda
+Buscar literatura que anuncia que vacunados son la mayoria de contagiados
+
+
+
+## Pruebas en general
+id_persona,fecha_prueba,id_tipo_prueba,id_resultado_prueba,id_ubigeo_prueba,fecha_sintomas
+12326510,12/01/2021,1,1,1293,12/01/2021
+27225872,21/12/2020,1,3,1283,
+
+
+Filas: 37 460 054
+```{r}
+pruebas <- 
+  fread("positividad-vacunados/TB_F100_SICOVID.csv", select=c("id_persona", "fecha_prueba", "id_tipo_prueba", "id_resultado_prueba")) %>%
+  as_tibble() %>% 
+  mutate(fecha_prueba=as.Date(fecha_prueba, "%d/%m/%Y"))
+```
+
+```{r}
+pruebas %>% 
+  group_by(id_resultado_prueba, year(fecha_prueba)) %>% 
+  summarise(
+    n=n(),
+    max(fecha_prueba),
+    min(fecha_prueba)
+  )
+```
+
+id_resultado_prueba	resultado_prueba
+1	Negativo
+2	Positivo
+3	IgG Positivo
+4	IgM e IgG Positivo
+5	IgM Positivo
+```{r}
+filter(pruebas, id_resultado_prueba == 4) %>% sample_n(100)
+```
+```{r}
+filter(pruebas, id_persona == 10569376)
+```
+
+
+
+
+
+
+
+--------------------------------
+
+
+
+
+Obviar esta parte, era solo para explorar el id vacuna, puede servir para otros analisis
+```{r}
+vacunas %>% 
+  group_by(id_vacuna) %>% 
+  summarise(
+    n = n(), 
+    max_fecha = max(fecha_vacunacion, na.rm=T),
+    min_fecha = min(fecha_vacunacion, na.rm=T)
+  ) %>% 
+  arrange(desc(min_fecha))
+```
+https://ourworldindata.org/grapher/covid-vaccine-doses-by-manufacturer?country=~PER
+
+5	48 259 594	 -- Pfizer
+6	21 106 727	 -- Sinopharm
+8  4 077 222	 -- Moderna?
+1  7 202 324	 -- AZ
+
+
+
+# Script antiguo
+
+```{r}
 # https://www.datosabiertos.gob.pe/dataset/casos-positivos-por-covid-19-ministerio-de-salud-minsa
-positivos <- read_delim("2022_01_24_positivos_covid.csv", delim = ";") %>%     
+positivos <- read_delim("2022_02_09_positivos_covid.csv", delim = ";") %>%     
     mutate_at(
         vars(contains("FECHA")),
         function(x) { as.Date(as.character(x), "%Y%m%d") } 
@@ -32,6 +440,20 @@ tmp <- colnames(positivos)
 tmp[5] <- "METODO"
 colnames(positivos) <- tmp
 ```
+<!-- cols( -->
+<!--   FECHA_CORTE = col_double(), -->
+<!--   DEPARTAMENTO = col_character(), -->
+<!--   PROVINCIA = col_character(), -->
+<!--   DISTRITO = col_character(), -->
+<!--   METODODX = col_character(), -->
+<!--   EDAD = col_double(), -->
+<!--   SEXO = col_character(), -->
+<!--   FECHA_RESULTADO = col_double(), -->
+<!--   UBIGEO = col_character(), -->
+<!--   id_persona = col_double() -->
+<!-- ) -->
+
+
 
 ```{r}
 positivos
@@ -64,7 +486,7 @@ positivos %>%
 if (!file.exists("resumen_vacunacion.csv")){
     # De https://www.datosabiertos.gob.pe/dataset/vacunacion
     # Ver en el readme.md del proyecto como lo proceso para obtener vacunas_proyeccion.csv
-    vacunacion <- read_csv("vacunas_proyeccion.csv")
+    vacunacion <- read_csv("vacunas_proyeccion_solo_id.csv")
     n_vacs <- count(vacunacion, id_persona)
     write_csv(n_vacs, "resumen_vacunacion.csv") # reduce a 29.7M filas    
 } else{
@@ -113,9 +535,9 @@ nrow(con_vac)
 ```
 
 ```{r}
-710440-695162
+1118689-1094847
 ```
-15 278 positivos que no se puede saber su estado de vacunacion
+23 842 positivos que no se puede saber su estado de vacunacion
 
 
 
@@ -133,10 +555,24 @@ con_vac %>%
         `Porcentaje del total de positivos` = p,
     ) %>% 
       kbl(
-          caption = "Distribución de pruebas positivas según estado de vacunación, desde 15/12/2021 hasta 24/01/2022"
+          caption = "Distribución de pruebas positivas según estado de vacunación, desde 15/12/2021 hasta 09/02/2022"
          ) %>%
     kable_material_dark()
 ```
+con_vac %>% nrow()
+
+
+Pandemia de los vacunados: 87.74 de los positivos tienen 2 o 3 vacunas
+
+Periodo: 15/12/2021 - 09/02/2021
+
+De los 1 094 847 positivos
+2vac     606 294 o 55.37% 
+3vac     354 334 o 32.36%
+0vac     87 989 o   8.03%
+1vac     46 226  o  4.22%
+
+
 
 
 
@@ -151,7 +587,7 @@ con_vac %>%
         `Porcentaje del total` = p,
     ) %>% 
     kbl(
-        caption = "<b style='color:black !important; text-align:center !important;'>Distribución de pruebas positivas según número de positivos por cada persona, desde 15/12/2021 hasta 24/01/2022</b>", 
+        caption = "<b style='color:black !important; text-align:center !important;'>Distribución de pruebas positivas según número de positivos por cada persona, desde 15/12/2021 hasta 09/02/2022</b>", 
     ) %>%
     kable_paper(full_width=F)
 ```
@@ -171,6 +607,7 @@ Verlo por proporciones diarias afianza la idea
 ```{r}
 con_vac %>% 
     rename(n_dosis=n) %>% 
+    filter(n_dosis <=3 | is.na(n_dosis)) %>% 
     count(FECHA_RESULTADO, n_dosis, name='x_dia_x_dosis') %>% 
     group_by(FECHA_RESULTADO) %>% 
     mutate(
@@ -181,7 +618,7 @@ con_vac %>%
     geom_col(aes(x=FECHA_RESULTADO, y = p, fill=n_dosis)) + 
     labs(
         title = "Porcentajes de pruebas positivas Covid según estado de vacunación",
-        subtitle = "Desde 15/12/2021 hasta 24/01/2022 | Fuente: datos abiertos Minsa | @gjrossir",
+        subtitle = "Desde 15/12/2021 hasta 09/02/2022 | Fuente: datos abiertos Minsa | @gjrossir",
         y = "Porcentaje (%) de pruebas positivas",
         x = "Fecha de resultado de prueba",
         fill = "# de dosis"
@@ -209,7 +646,7 @@ count(con_vac, METODO,sort=T) %>%
         `Número de pruebas` = n
     ) %>% 
     kbl(
-        caption = "<b style='color:black !important; text-align:center !important;'>Distribución de pruebas positivas según tipo de prueba,<br>desde 15/12/2021 hasta 24/01/2022</b>", 
+        caption = "<b style='color:black !important; text-align:center !important;'>Distribución de pruebas positivas según tipo de prueba,<br>desde 15/12/2021 hasta 09/02/2022</b>", 
     ) %>%
     kable_paper(full_width=F)
     # kable_material_dark(full_width = F, )

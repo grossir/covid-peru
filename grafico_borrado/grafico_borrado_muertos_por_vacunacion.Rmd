@@ -18,7 +18,7 @@ library(stringr)
 ```{r}
 # https://cloud.minsa.gob.pe/s/8EsmTzyiqmaySxk/download
 cdc <- 
-    read_csv("2022_02_15_TB_FALLECIDO_HOSP_VAC.csv") %>% 
+    read_csv("2022_02_21_TB_FALLECIDO_HOSP_VAC.csv") %>% 
     mutate_at(vars(contains("fecha")), function(x){ as.Date(x, format="%d/%m/%Y") }) %>% 
     mutate(semana_muerte = paste0(year(fecha_fallecimiento), "|", str_pad(week(fecha_fallecimiento), 2, pad="0"))) %>% 
     mutate(
@@ -112,13 +112,13 @@ transposed %>%
 
 
 ```{r}
-filter(x, semana_muerte=="2022|06") %>% View()
+filter(x, semana_muerte=="2022|07") %>% View()
 ```
 
 
 Interesante ver medidas centrales para 
 ```{r}
-filter(x, semana_muerte=="2022|06") %>% group_by(flag_vacuna) %>% summarise(mean(edad), sd(edad))
+filter(x, semana_muerte=="2022|07") %>% group_by(flag_vacuna) %>% summarise(mean(edad), sd(edad))
 ```
 
 ```{r}

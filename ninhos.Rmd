@@ -47,7 +47,7 @@ sinadef_completo <- read_csv("2022_01_28_TB_SINADEF/TB_SINADEF.csv", col_types =
 
 # https://www.datosabiertos.gob.pe/dataset/fallecidos-por-covid-19-ministerio-de-salud-minsa/resource/4b7636f3-5f0c-4404-8526
 # https://cloud.minsa.gob.pe/s/xJ2LQ3QyRW38Pe5/download
-sinadef_solo_covid <- read_delim("2022_01_17_fallecidos_sinadef.csv", delim = ";") %>% 
+sinadef_solo_covid <- read_delim("2022_01_30_fallecidos_sinadef.csv", delim = ";") %>% 
         mutate(
             FECHA_FALLECIMIENTO = as.Date(as.character(FECHA_FALLECIMIENTO), "%Y%m%d"),
             ano = year(FECHA_FALLECIMIENTO),
@@ -189,7 +189,7 @@ sinadef_solo_covid %>%
     rename(`Criterio de clasificación muerte por Covid` = CLASIFICACION_DEF, `Total de muertos`=n,  `Porcentaje del total` = p) %>% 
     select(-total) %>% 
     kbl(
-        caption = "<b style='color:black !important; text-align:center !important;'>Criterios de clasificación en muertos por Covid del grupo de 0-4 años</b>", 
+        caption = "<b style='color:black !important; text-align:center !important;'>Criterios de clasificación en muertos por Covid del grupo de 0-4 años, 2020-2021</b>", 
     ) %>%
     kable_paper(full_width=F)
 

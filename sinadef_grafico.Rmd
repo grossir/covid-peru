@@ -12,16 +12,18 @@ library(stringr)
 ```
 
 
+
 Bajar datos y descomprimir de:
 
 https://www.datosabiertos.gob.pe/dataset/sinadef-certificado-defunciones
 
 ```{r}
-x <- read_csv("TB_SINADEF_2021_12_23/TB_SINADEF.csv", col_types = cols(.default = col_character())) %>% 
+sinadef <- read_csv("TB_SINADEF_2021_12_23/TB_SINADEF.csv", col_types = cols(.default = col_character())) %>% 
     mutate(
         FECHA = as.Date(FECHA, format="%d/%m/%Y"),
         EDAD=as.integer(EDAD)
     ) 
+x <- sinadef
 ```
 
 
@@ -68,12 +70,15 @@ SINADEF
 
 ```{r}
 FECHA_COMIENZO_VACUNACION <- as.Date("09/02/2021", "%d/%m/%Y")
-x <- read_delim("2021_12_31_fallecidos_covid.csv", delim = ";") %>% 
+
+
+sinadef_solo_covid <- read_delim("2021_12_31_fallecidos_covid.csv", delim = ";") %>% 
         mutate(
             FECHA_FALLECIMIENTO = as.Date(as.character(FECHA_FALLECIMIENTO), "%Y%m%d"),
             ano = year(FECHA_FALLECIMIENTO),
             muerto_despues_de_inicio_vacunacion = FECHA_FALLECIMIENTO > FECHA_COMIENZO_VACUNACION
         )
+x <- sinadef_solo_covid
 ```
 
 ```{r}
@@ -184,78 +189,3 @@ https://docs.google.com/spreadsheets/d/1OdQdrop1AiYwy9XWBVK8hZeBko3N8VuTpJNomExo
 
 
 
-## Parte 3: por edades
-```{r}
-muertos <- nrow(x)
-```
-
-```{r}
-(x_edad <- 
-    count(x, EDAD_DECLARADA, sort=T) %>% 
-    mutate(p  = round(n/muertos* 100,4))
-)
-```
-
-
-Grupos de riesgo segun el MINSA
-https://www.datosabiertos.gob.pe/dataset/tabla-de-grupo-de-riesgo
-5 - 12
-Personas de 12  a 17 años
-Personas de 18  a 19 años
-Personas de 20  a 29 años
-Personas de 30 a 39 años
-Personas de 40 a 49 años
-Personas de 50 a 59 años
-60 años a más
-60 años a más, Adulto Mayor
-
-```{r}
-x <- x %>% 
-    mutate(
-        grupo = case_when(
-            between(EDAD_DECLARADA, 60, 120) ~ "60+",
-            between(EDAD_DECLARADA, 50, 59) ~ "50-59",
-            between(EDAD_DECLARADA, 40, 49) ~ "40-49",
-            between(EDAD_DECLARADA, 30, 39) ~ "30-39",
-            between(EDAD_DECLARADA, 18, 29) ~ "18-29",
-            between(EDAD_DECLARADA, 13, 17) ~ "13-17",
-            between(EDAD_DECLARADA, 5, 12) ~ "5-12",
-            between(EDAD_DECLARADA, 0, 4) ~ "0-4"
-        )
-    )
-
-```
-
-
-
-Cifras finales por grupos
-```{r}
-x %>% 
-    count(grupo,sort=T) %>% 
-    mutate(p  = round(n/muertos* 100, 4)) %>% 
-    rename(`Grupo`=grupo, `Total de muertos`=n,  `Porcentaje del total` = p)
-```
-
-
-Cifras de criterios de definicion de muertes en los grupos jovenes
-```{r}
-filter(x, grupo %in% c("0-4", "5-12", "13-17")  ) %>%
-    count(CLASIFICACION_DEF,sort=T) %>%
-    ungroup() %>%
-    mutate(
-        p= round(n/sum(n)*100,4),
-        CLASIFICACION_DEF = str_replace(CLASIFICACION_DEF, "Ã³", "ó") %>% str_replace("Ã", "í") 
-    ) %>% 
-    rename(`Definición muerte por Covid` = CLASIFICACION_DEF, `Total de muertos`=n,  `Porcentaje del total` = p)
-    
-```
-
-
-
-### Analisis TODO: ver como evolucionan los criterios de evaluacion
-
-```{r}
-count(x, FECHA_FALLECIMIENTO, CLASIFICACION_DEF) %>% 
-    ggplot() + 
-    geom_line(aes(x=FECHA_FALLECIMIENTO, y = n, color=CLASIFICACION_DEF))
-```
