@@ -1,14 +1,43 @@
 # Covin Perú
 
-Análisis y gráficos sobre el Covin en Perú
-Pueden encontrar la publicación y discusiones en mi [Twitter](https://twitter.com/gjrossir)
+Datos obtenidos por solicitudes de acceso a la información sobre el Covid en Perú.
 
-## Productos
+Se puede encontrar análisis y gráficos realizados sobre estos datos en mi Substack
 
-[Gráfico borrado por el Minsa: Visualización de fallecidos por Covin según estado de vacunación](https://datawrapper.dwcdn.net/naPx1/)
+A continuación, algunos comentarios sobre los datos
+
+## Datos obtenidos por transparencia
+
+### merma_factor_perdida
+
+Documentos sobre el factor perdida de las vacunas Covid obtenidos por Transparencia
+
+### esavis
+
+Informes internos producidos por el CDC sobre **ESAVI**: Eventos Supuestamente Atribuidos a la Vacunación o Inmunización. Para obtener algunos tuve que apelar al Tribunal de Transparencia
+
+### esavi_subregistro
+
+Datos de países latinoamericanos y la OPS para comparar tasas de reporte de ESAVI por vacuna Covid.
+
+### olas
+
+Informes internos producidos por el CDC sobre la posibilidad de nuevas olas Covid, y sus recomendaciones. Contienen muchas sobre estimaciones y recomendaciones alarmistas
+
+### documentos
+
+Documentos de interés varios 
+
+### documentos_judiciales
+
+Sentencias relacionadas a temas de la vacunación forzada
+
+### aduanas
+
+Sobre los precios filtrados de las vacunas
 
 
-## Datos
+## Datos abiertos
 
 ### Sinadef
 
